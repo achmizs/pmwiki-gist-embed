@@ -5,10 +5,10 @@
   * \brief Embed Gists in a wikipage.
   */
 
-$RecipeInfo['GistEmbed']['Version'] = '2018-10-19';
+$RecipeInfo['GistEmbed']['Version'] = '2021-12-11';
 
 ## (:gist-embed:)
-Markup('gist-embed', '<fulltext', '/\\(:gist-embed\\s+(.+?)\\s*:\\)/', 'GistEmbed');
+Markup('gist-embed', '<fulltext', '/\(:gist-embed\s+(.+?)\s*:\)/', 'GistEmbed');
 
 SDV($GistEmbedHighlightStyle, "background-color: yellow;");
 
@@ -18,7 +18,7 @@ function GistEmbed($m) {
 	## Parse arguments to the markup.
 	$parsed = ParseArgs($m[1]);
 
-	## These are the "bare" arguments (ones which don't require a key, just value(s)).	
+	## These are the “bare” arguments (ones which don’t require a key, just value(s)).
 	$args = $parsed[''];
 	$gist_id = $args[0];
 	$noJS = in_array('no-js', $args);
@@ -71,7 +71,7 @@ function GistEmbed($m) {
 	if ($raw) {
 		## If no filenames have been specified, we'll have to retrieve the file list from
 		## the server; otherwise, we'll have no idea what files to request, and just 
-		## retrieving the 'raw' URL for a multi-file gist (with no file specified) gets
+		## retrieving the ‘raw’ URL for a multi-file gist (with no file specified) gets
 		## the first file only...
 		if (empty($files)) {
 			$full_gist_data = json_decode(file_get_contents($embed_json_url),true);
@@ -90,29 +90,32 @@ function GistEmbed($m) {
 				foreach ($raw_lines as $line)
 					$line = PVSE($line);
 			}
-			## Highlighting only works if no-pre is NOT enabled AND if we're displaying a 
+			## Highlighting only works if no-pre is NOT enabled AND if we’re displaying a 
 			## single file only.
-			if (!empty($hl_line_numbers) && !$noPre && count($files) == 1) {
+			if (   !empty($hl_line_numbers) 
+				&& !$noPre 
+				&& count($files) == 1) {
 				if ($hl_to_end_from >= 0)
 					$hl_line_numbers = array_merge($hl_line_numbers, range($hl_to_end_from, count($raw_lines) - 1));
 				foreach ($hl_line_numbers as $l) {
 					$raw_lines[$l] = "<span class='gist-embed-highlighted-line'>" . rtrim($raw_lines[$l]) . "</span>";
 				}
 			}
-			## Specifying line numbers only works if we're displaying a single file only.
-			if (!empty($line_numbers) && count($files) == 1) {			
+			## Specifying line numbers only works if we’re displaying a single file only.
+			if (  !empty($line_numbers) 
+				&& count($files) == 1) {
 				if ($to_end_from >= 0)
 					$line_numbers = array_merge($line_numbers, range($to_end_from, count($raw_lines) - 1));
 				$raw_lines = array_intersect_key($raw_lines, array_flip($line_numbers));
 			}
 			$raw_text = implode("\n", $raw_lines);
 			
-			## The 'no-pre' option means we shouldn't wrap the text in a <pre> tag.
+			## The ‘no-pre’ option means we shouldn’t wrap the text in a <pre> tag.
 			$out[] = $noPre ? $raw_text : Keep("<pre class='escaped gistRaw' id='gistEmbed_$id_$filename'>\n" . $raw_text . "\n</pre>\n");
 		}
 		$out = implode($noPre ? "\n\n" : "", $out);
 	} else if ($noJS) {
-		include_once('simple_html_dom.php');
+		include_once('simplehtmldom/simple_html_dom.php');
 	
 		$json_content = json_decode(file_get_contents($embed_json_url),true);
 				
@@ -126,7 +129,7 @@ function GistEmbed($m) {
 		$content->id = "gistEmbed_$id";
 		
 		## If specific files are specified, we simply delete the div.gist-file containers
-		## that contain files we don't want.
+		## that contain files we don’t want.
 		if (!empty($files)) {
 			$file_ids = preg_replace("/\./", "-", $files);
 			$gist_file_blocks = $content_html->find("div.gist-file");
@@ -136,9 +139,10 @@ function GistEmbed($m) {
 			}
 		}
 		
-		## Specifying line numbers only works if we're displaying a single file only.
+		## Specifying line numbers only works if we’re displaying a single file only.
 		$displayed_gist_files = array_filter($content_html->find("div.gist-file"), function ($d) { return $d->outertext; });
-		if (!empty($line_numbers) && count($displayed_gist_files) == 1) {
+		if (  !empty($line_numbers) 
+			&& count($displayed_gist_files) == 1) {
 			$lines = reset($displayed_gist_files)->find(".js-file-line-container tr");
 			if ($to_end_from >= 0)
 				$line_numbers = array_merge($line_numbers, range($to_end_from, count($lines) - 1));
@@ -149,9 +153,10 @@ function GistEmbed($m) {
 			}
 		}
 		
-		## Highlighting specific line numbers only works if we're display a single file 
-		## only.
-		if (!empty($hl_line_numbers) && count($displayed_gist_files) == 1) {
+		## Highlighting specific line numbers only works if we’re displaying 
+		## a single file only.
+		if (  !empty($hl_line_numbers) 
+			&& count($displayed_gist_files) == 1) {
 			$lines = reset($displayed_gist_files)->find(".js-file-line-container tr");
 			if ($hl_to_end_from >= 0)
 				$hl_line_numbers = array_merge($hl_line_numbers, range($hl_to_end_from, count($lines) - 1));
@@ -165,43 +170,49 @@ function GistEmbed($m) {
 		$out = Keep($content);
 	} else {
 		$out = Keep("<script id='gistEmbedScript_$id' src='$embed_js_url'></script>");
+		$out .= Keep("
+<script>
+	document.querySelector('#gistEmbedScript_$id').parentElement.nextSibling.id = 'gistEmbed_$id';
+</script>
+		");
 		
-		## If specific files are specified, we'll delete the div.gist-file containers 
-		## that contain files we don't want (this script will run right after the script
+		## If specific files are specified, we’ll delete the div.gist-file containers 
+		## that contain files we don’t want (this script will run right after the script
 		## that adds the content in the first place).
 		if (!empty($files)) {
-			$files_js = preg_replace("/\./", "-", "[ '".implode("', '",$files)."' ]");
+			$files_js = preg_replace("/\./", "-", "[ '" . implode("', '", $files) . "' ]");
 			$out .= Keep("
-<script>
-	var files = $files_js;
-	document.querySelector('#gistEmbedScript_$id').parentElement.nextSibling.querySelectorAll('div.gist-file').forEach(function (gist_file_block) {
+<script>{
+	let files = $files_js;
+	document.querySelector('#gistEmbed_$id').querySelectorAll('div.gist-file').forEach(function (gist_file_block) {
 		if (files.indexOf(gist_file_block.querySelector('div.file').id.substring(5)) == -1)
 			gist_file_block.parentElement.removeChild(gist_file_block);
 	});	
-</script>
+}</script>
 			");
 		}
 		
-		## Specifying line numbers only works if we're displaying a single file only.
-		if (!empty($line_numbers) || !empty($hl_line_numbers)) {
-			$line_numbers_js = "[ ".implode(", ",$line_numbers)." ]";
-			$hl_line_numbers_js = "[ ".implode(", ",$hl_line_numbers)." ]";
+		## Specifying line numbers only works if we’re displaying a single file only.
+		if (   !empty($line_numbers) 
+			|| !empty($hl_line_numbers)) {
+			$line_numbers_js = "[ " . implode(", " , $line_numbers) . " ]";
+			$hl_line_numbers_js = "[ " . implode(", " , $hl_line_numbers) . " ]";
 			$out .= Keep("
-<script>
-	if (document.querySelector('#gistEmbedScript_$id').parentElement.nextSibling.querySelectorAll('div.gist-file').length == 1) {
-		var num_lines = document.querySelector('#gistEmbedScript_$id').parentElement.nextSibling.querySelector('div.gist-file').querySelectorAll('.js-file-line-container tr').length;
+<script>{
+	if (document.querySelector('#gistEmbed_$id').querySelectorAll('div.gist-file').length == 1) {
+		let num_lines = document.querySelector('#gistEmbed_$id').querySelector('div.gist-file').querySelectorAll('.js-file-line-container tr').length;
 
-		var line_numbers = $line_numbers_js;
-		var to_end_from = $to_end_from;
+		let line_numbers = $line_numbers_js;
+		let to_end_from = $to_end_from;
 		if (to_end_from >= 0)
 			line_numbers = [...line_numbers, ...[...Array(num_lines - to_end_from)].map((_, i) => to_end_from + i)];
 
-		var hl_line_numbers = $hl_line_numbers_js;
-		var hl_to_end_from = $hl_to_end_from;
+		let hl_line_numbers = $hl_line_numbers_js;
+		let hl_to_end_from = $hl_to_end_from;
 		if (hl_to_end_from >= 0)
 			hl_line_numbers = [...hl_line_numbers, ...[...Array(num_lines - hl_to_end_from)].map((_, i) => hl_to_end_from + i)];
 
-		document.querySelector('#gistEmbedScript_$id').parentElement.nextSibling.querySelector('div.gist-file').querySelectorAll('.js-file-line-container tr').forEach(function (line, i) {
+		document.querySelector('#gistEmbed_$id').querySelector('div.gist-file').querySelectorAll('.js-file-line-container tr').forEach(function (line, i) {
 			// Highlight specified line ranges (if any have been specified via the hl= parameter).
 			if (hl_line_numbers.indexOf(i) != -1)
 				line.children[1].className += ' gist-embed-highlighted-line';
@@ -211,11 +222,9 @@ function GistEmbed($m) {
 				line.parentElement.removeChild(line);
 		});
 	}
-</script>
+}</script>
 			");
 		}
-		
-		GistEmbedAppendFooter();
 	}
 	
 	global $HTMLStylesFmt;
@@ -231,22 +240,6 @@ function GistEmbed($m) {
 	
 	$id++;
 	return $out;
-}
-
-function GistEmbedAppendFooter() {
-	static $ran_once = false;
-	if (!$ran_once) {
-		global $HTMLFooterFmt;
-		$HTMLFooterFmt[] = 
-"<script>
-	document.querySelectorAll('div.gist').forEach(function (embed) {
-		if (embed.previousSibling && embed.previousSibling.tagName == 'P') {
-			embed.id = 'gistEmbed_' + embed.previousSibling.firstChild.id.substring(16);
-		}
-	});
-</script>\n";
-	}
-	$ran_once = true;
 }
 
 function GistEmbedInjectStyles() {
